@@ -18,25 +18,22 @@ def get_cropped_image():
         try:
             image_name = image.split('/')[2].split('.')[0]
 
-            boxes = []
-
             with open('sample_data/json/' + image_name + '.json') as f:
                 file = json.load(f)
 
                 for annotation in file['annotation']:
                     if annotation['class'] == 'traffic_light':
-                        boxes.append(annotation['box'])
+                        point = annotation['box']
                         light = {v: k for k, v in annotation['attribute'][0].items()}
                         Y.append(light.get('on'))
+
+                        img = cv2.imread('sample_data/image/' + image_name + '.jpg')
+                        pointed_img = img[point[1]:point[3], point[0]:point[2]]
+                        pointed_img = cv2.resize(pointed_img, (100, 60))
+                        X.append(pointed_img)
                     else:
                         continue
 
-            img = cv2.imread('sample_data/image/' + image_name + '.jpg')
-
-            for point in boxes:
-                pointed_img = img[point[1]:point[3], point[0]:point[2]]
-                pointed_img = cv2.resize(pointed_img, (20, 20))
-                X.append(pointed_img)
         except cv2.error as e:
             print(e)
             continue
@@ -58,18 +55,20 @@ def create_model():
     from tensorflow.keras.layers import Dropout
 
     model = Sequential([
-        layers.experimental.preprocessing.Rescaling(1. / 255, input_shape=(20, 20, 3)),
+        layers.experimental.preprocessing.Rescaling(1. / 255, input_shape=(100, 60, 3)),
         layers.Conv2D(16, 3, padding='same', activation='relu'),
         layers.MaxPooling2D(),
         Dropout(0.25),
         layers.Conv2D(32, 3, padding='same', activation='relu'),
         layers.MaxPooling2D(),
+        Dropout(0.25),
         layers.Conv2D(64, 3, padding='same', activation='relu'),
         layers.MaxPooling2D(),
         Dropout(0.25),
         layers.Flatten(),
         layers.Dense(128, activation='relu'),
         layers.Dense(64, activation='relu'),
+        layers.Dense(32, activation='relu'),
         layers.Dense(5, activation='softmax')
     ])
 
@@ -94,7 +93,7 @@ checkpoint = ModelCheckpoint(filename,
                              monitor='val_loss',
                              verbose=1)
 
-history = model.fit(x_train, y_train, epochs=150, validation_split=0.3, callbacks=[checkpoint])
+history = model.fit(x_train, y_train, epochs=250, validation_split=0.4, callbacks=[checkpoint])
 
 model.load_weights(filename)
 score = model.evaluate(x_test, y_test, verbose=0)
